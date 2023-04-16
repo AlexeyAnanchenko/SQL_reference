@@ -23,7 +23,7 @@ CREATE TABLE movie (
 	length smallint,
 	replacement_cost numeric(5, 2),
 	rating character varying(50), -- тоже самое, что varchar(50)
-	last_update timestamp NOT NULL DEFAULT now(), -- дата и время, не возможен ноль, по умолчанию дата создания записи
+	last_update timestamp NOT NULL DEFAULT now(), -- дата и время, не возможен NULL, по умолчанию дата создания записи
 	special_features text[], -- скобки означают массив в каждой записи
 	fulltext tsvector -- текстовый формат оптимизированный для поиска
 );
@@ -59,14 +59,14 @@ header; -- есть ли заголовок
 
 SELECT name AS "Наименование", -- Переименовываем столбец "на лету" (обязательно ДВОЙНЫЕ КАВЫЧКИ)
 	   last_update
-FROM category
-LIMIT 2 OFFSET 0;
+FROM category -- из таблицы category
+LIMIT 2; -- первые 2 строчки
 
 ---------------------------------------
 
 SELECT *  -- выгрузить все столбцы
 FROM film
-LIMIT 3 OFFSET 7;
+LIMIT 3 OFFSET 7; -- OFFSET игнорирует первые 7 строк и переходит к 8-й
 
 ---------------------------------------
 
@@ -81,13 +81,13 @@ LIMIT 6;
 
 SELECT *
 FROM film
-WHERE replacement_cost >= 29.99;
+WHERE replacement_cost >= 29.99; -- больше или равно 29,99
 
 ---------
 
 SELECT *
 FROM country
-WHERE country = 'Brazil';
+WHERE country = 'Brazil'; -- равно работает со строками тоже
 
 ---------
 
@@ -102,22 +102,14 @@ WHERE country <> 'Brazil'; -- "!=" тоже подходит
 SELECT *
 FROM country
 WHERE country <> 'Brazil'
-  AND country != 'Afghanistan';
+  AND country != 'Afghanistan'; -- когда AND оба условия должны быть верны 
  
 ---------
  
 SELECT *
 FROM country
-WHERE NOT country <> 'Brazil' -- NOT меняет 
-   OR NOT country != 'Afghanistan';
-
----------
-  
-SELECT *
-FROM payment
-WHERE customer_id = 341
-   OR customer_id = 342
-LIMIT 10;
+WHERE NOT country <> 'Brazil' -- NOT меняет TRUE на FALSE, и наоборот
+   OR NOT country != 'Afghanistan'; -- когда OR одно из условий должно быть TRUE для записи, чтобы попасть в итог
 
 ---------------------------------------
 
@@ -158,7 +150,7 @@ SELECT actor_id,
 	   first_name,
 	   last_name
 FROM actor
-WHERE actor_id BETWEEN 10 AND 20; -- ищем значения между 10 и 20 включительно
+WHERE actor_id BETWEEN 10 AND 20; -- ищем значения между 10 включительно и 20 включительно
 
 ---------------------------------------
 
