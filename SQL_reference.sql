@@ -343,7 +343,7 @@ LIMIT 10; -- лимит устанавливается самым последн
 
 SELECT rating, AVG(rental_rate) "Средняя ставка аренды" -- Псевдоним (или алиас) можно указать без AS, просто через пробел (фишка Postgre)
 FROM film
-GROUP BY rating
+GROUP BY rating -- в Postgre при группировке можно обращаться к столбцам из SELECT по порядковому номеру
 HAVING AVG(rental_rate) > 3 -- псевдоним "Средняя ставка аренды" появиться позже, поэтому дублируем агрегатную функцию
 ORDER BY "Средняя ставка аренды" DESC;
 
@@ -369,7 +369,7 @@ SELECT CONCAT(first_name, ' ', last_name) "Полное имя",
 	   f.title "Название фильма",
 	   cat.name "Название категории"
 FROM actor AS a
-JOIN film_actor AS f_a ON a.actor_id = f_a.actor_id
+JOIN film_actor AS f_a USING (actor_id) -- можно вместо ON использовать USING, если столбцы называются одинаково
 JOIN film AS f ON f_a.film_id = f.film_id
 JOIN film_category AS f_c ON f_a.film_id = f_c.film_id
 JOIN category AS cat ON f_c.category_id = cat.category_id -- данные можно подтягивать используя множество таблиц посредников!!!
