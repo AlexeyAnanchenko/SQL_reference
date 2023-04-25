@@ -502,7 +502,7 @@ ON one.film_id = two.film_id;
 
 -- Реализуем такой же запрос как выше только используя временные таблицы
 WITH 
--- первый подзапрос с псевдонимом one
+-- первый подзапрос (временная таблица) с псевдонимом one
 one AS (SELECT film_id,
 			title,
 			MAX("length") AS "Максимальная длина фильма"
@@ -510,8 +510,8 @@ one AS (SELECT film_id,
 	 	GROUP BY film_id
 	 	ORDER BY "Максимальная длина фильма" DESC
 	 	LIMIT 5), -- подзапросы разделяют запятыми
--- второй подзапрос с псевдонимом two
- two AS (SELECT film_id,
+-- второй подзапрос (временная таблица) с псевдонимом two
+two AS (SELECT film_id,
 			COUNT(store_id)
 	 	 FROM inventory
 	 	 GROUP BY film_id)
@@ -522,3 +522,72 @@ SELECT one.film_id,
 	   "Максимальная длина фильма",
 	   count
 FROM one LEFT JOIN two ON one.film_id = two.film_id;
+
+/****************************************************************************************/
+
+-- ОКОННЫЕ ФУНКЦИИ (позволяют добавлять агрегированные данные без группировки записей)
+
+SELECT f.film_id,
+	   f.title,
+	   f.length,
+	   f.rating,
+	   AVG(length) OVER (PARTITION BY f.rating) AS avg_length -- не лету вычислили среднюю длину фильма в зависимости от категории без группировки записей
+FROM public.film f; -- в данном случае обратились к конкретной схеме (public) и таблице film. В предыдущих запросах public используется по умолчанию
+
+---------------------
+
+SELECT f.title,
+	   f.length,
+	   f.rating,
+	   SUM(length) OVER () AS avg_length -- такой запрос применит агрегирующую функцию ко всем записям без разбивки по категориям
+FROM public.film f;
+
+---------------------
+
+SELECT f.title,
+	   f.length,
+	   f.rating,
+	   f.rental_rate,
+	   SUM(length) OVER (PARTITION BY f.rating, rental_rate) AS avg_length -- аналогично GROUP BY можно группировать данные сразу по нескольким столбцам
+FROM public.film f;
+
+---------------------
+
+SELECT f.title,
+	   f.rating,
+	   ROW_NUMBER() OVER (PARTITION BY f.rating) -- ROW_NUMBER последовательно нумерует строки в каждом окне независимо
+FROM public.film f;
+
+---------------------
+
+SELECT f.title,
+	   f.rating,
+	   ROW_NUMBER() OVER (ORDER BY film_id ASC) -- такой запрос проранжирует все записи по film_id - от меньшего к большему
+FROM public.film f;
+
+---------------------
+
+WITH film_rn AS -- для визуального удобства используем временную таблицу
+	(SELECT f.title,
+	   		ROW_NUMBER() OVER (ORDER BY rating, film_id) AS rn -- можно сортировать по нескольким столбцам (в данном случае raiting самый приоритетный)
+	 FROM public.film f)
+
+SELECT *
+FROM film_rn
+WHERE rn <> 1; -- полученный после ранжирования столбец можем сразу отфильтровать
+
+---------------------
+
+SELECT *,
+	   RANK() OVER (ORDER BY "length") -- RANK пронумерует одинаковую длину фильма одним номером
+FROM film;
+
+-- ВАЖНЫЙ МОМЕНТ: RANK для каждого следующего ранга номер вычисляется не от предыдущего номера ранга а по номеру записи в таблице
+
+---------------------
+
+SELECT *,
+	   DENSE_RANK() OVER (ORDER BY "length") -- DENSE_RANK номера рангов присваивает полседовательно
+FROM film;
+
+---------------------
