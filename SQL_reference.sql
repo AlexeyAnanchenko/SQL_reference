@@ -591,3 +591,108 @@ SELECT *,
 FROM film;
 
 ---------------------
+
+SELECT f.title,
+	   f.rating,
+	   NTILE(5) OVER (ORDER BY film_id ASC) -- NTILE делит все записи на максимально равные части по кол-ву и ранжирует их
+FROM public.film f
+LIMIT 201; -- оконная функция проранжирует все данные до срабатывания ограничения LIMIT
+
+---------------------
+
+-- можно использовать сразу несколько операторов оконных функций последовательно
+
+WITH film_rn AS
+	(SELECT f.title,
+			f.rating,
+			f.length,
+	   		ROW_NUMBER() OVER (PARTITION BY f.rating ORDER BY f.length DESC) AS rn -- порядок написания имеет значения
+	 FROM public.film f)
+
+SELECT *
+FROM film_rn
+WHERE film_rn.rn = 1; -- получим самый длинный фильм в каждом из рейтингов!
+
+---------------------
+
+SELECT *,
+	   NTILE(3) OVER (PARTITION BY f.rating ORDER BY film_id) -- здесь сначала резделим на рейтинги, далее ранжирование NTILE и наконец сортировка по id
+FROM public.film f;
+
+---------------------
+
+-- с помощью окон. функ. можно производить и кумулятивные вычисления (с накоплением)
+
+WITH film_rn AS -- проранжированные фильмы внутри каждого рейтинга
+	(SELECT *,
+			ROW_NUMBER() OVER (PARTITION BY rating ORDER BY film_id) AS row_n
+	 FROM film)
+			
+SELECT film_id,
+	   title,
+	   rating,
+	   "length",
+	   row_n,
+	   SUM("length") OVER (ORDER BY rating) AS length_cum
+	   /* такой запрос просуммирует длины каждого фильма, но отобразит одинаковые одно значения для одного рейтинга.
+	    * Это значение будет равно сумме накопительным итогом, включая последнюю запись такущего рейтинга*/
+FROM film_rn
+WHERE row_n < 4; -- достанем только первые 4 позиции из каждого рейтинга
+
+---------------------
+
+WITH film_rn AS
+	(SELECT *,
+			ROW_NUMBER() OVER (PARTITION BY rating ORDER BY film_id) AS row_n
+	 FROM film)
+			
+SELECT film_id,
+	   title,
+	   rating,
+	   "length",
+	   row_n,
+	   AVG("length") OVER (PARTITION BY rating ORDER BY film_id) AS length_cum -- остальные агрег. функции тоже работают кумулятивно
+	   /* такой запрос отобразит среднее значение накопительным итогом в разрезе каждой группы отдельно
+	    * и отобразит при этом не одинаковую цифру, а разные в каждой записе, т.к. ORDER BY уже по уникальным film_id */
+FROM film_rn
+WHERE row_n < 4
+ORDER BY rating;
+
+---------------------
+
+/* Функции LEAD() и LAG() имеют следующий синтаксис
+ * LEAD(<поле, из которого берём данные>, <смещение по вертикали>, <значение по умолчанию>) OVER (<определение окна>)
+ * LAG(<поле, из которого берём данные>, <смещение по вертикали>, <значение по умолчанию>) OVER (<определение окна>).
+ * 
+ * Функции смещения возвращают данные из других записей в зависимости от их расстояния от текущего значения. */
+
+SELECT p.customer_id,
+	   c.full_name,
+	   p.payment_id,
+	   p.payment_date::date AS "Дата оплаты",
+	   LEAD(p.payment_date::date, 1, '2000-01-01') OVER (PARTITION BY p.customer_id) AS "След. дата оплаты", -- в качестве значения по умолчанию - дата
+	   LAG(p.payment_date::date, 2, NULL) OVER (PARTITION BY p.customer_id ORDER BY payment_id) AS "Пред. дата оплаты" -- смещение на 2 строки
+	   -- ORDER BY определяет сортировку по полю относительно которого будем смотреть данные по функции
+FROM (SELECT customer_id,
+			 CONCAT(first_name, ' ', last_name) AS full_name
+	  FROM customer) AS c
+JOIN payment AS p ON c.customer_id = p.customer_id;
+
+
+----------------------
+
+-- можно различные математические операции с помощью функций LEAD и LAG
+
+SELECT p.customer_id,
+	   c.full_name,
+	   p.payment_id,
+	   p.payment_date::date AS "Дата оплаты",
+	   LAG(p.payment_date::date, 1, NULL) OVER (PARTITION BY p.customer_id) AS "Пред. дата оплаты",
+	   p.payment_date::date - LAG(p.payment_date::date, 1, NULL) OVER (PARTITION BY p.customer_id) AS "Прошло дней с пред. оплаты"
+FROM (SELECT customer_id,
+			 CONCAT(first_name, ' ', last_name) AS full_name
+	  FROM customer) AS c
+JOIN payment AS p ON c.customer_id = p.customer_id;
+
+----------------------
+
