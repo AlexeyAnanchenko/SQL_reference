@@ -696,3 +696,96 @@ JOIN payment AS p ON c.customer_id = p.customer_id;
 
 ----------------------
 
+-- определение оконной функции после OVER можно вынести отдельно с помощью WINDOW
+
+SELECT *,
+	   RANK() OVER my_window,
+	   ROW_NUMBER() OVER my_window,
+	   SUM("length") OVER my_window AS "len_sum" -- так удобно использовать сразу несколько оконных функций
+FROM film
+WHERE language_id = 1 -- WINDOW записывается после WHERE
+WINDOW my_window AS (ORDER BY "length") -- определяем окно отдельным оператором
+ORDER BY "length"; -- -- WINDOW записывается до ORDER BY
+
+/****************************************************************************************/
+
+/* 
+ * ОГРАНИЧЕНИЯ ОКОННЫХ ФУНКЦИЙ:
+ *  1. В отличие от GROUP BY с агрегирующими функциями нельзя использовать оператор DISTINCT
+ *  2. Оконные функции нельзя использовать в одном запросе с GROUP BY
+ *  3. После WHERE нельзя использовать OVER
+ */ 
+
+/****************************************************************************************/
+
+-- РАМКИ В ОКОННЫХ ФУНКЦИЯХ. ДОПОЛНИТЕЛЬНЫЕ ФУНКЦИИ
+
+/* Рамки позволяют указать записи, которые попадут в рамку, — до и после текущей.
+ * Конструкция с ROWS (RANGE) выглядит так: ROWS BETWEEN <начало рамки> AND <конец рамки>
+ * Начало рамки задают выражением N PRECEDING, где N — это количество записей до текущей.
+ * Конец рамки задают выражением N FOLLOWING, где N — это количество записей после текущей. */
+
+SELECT *,
+	   AVG(amount) OVER (ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING) AS avg_amount -- порядок операторов важен внутри OVER
+FROM payment p;
+
+------------------------------------
+
+SELECT *,
+	   AVG(amount) OVER (ROWS BETWEEN CURRENT ROW AND 2 FOLLOWING) AS avg_amount -- CURRENT_ROW значит рамка начинается с текущей строчки
+FROM payment p;
+
+------------------------------------
+
+SELECT *,
+	   -- строка ниже разделяет сначала на окна по staff_id, потом внутри окон на рамки от 1 до 3 строчек
+	   SUM(amount) OVER (PARTITION BY staff_id ROWS BETWEEN 1 PRECEDING AND CURRENT ROW) AS avg_amount
+FROM payment p;
+
+------------------------------------
+
+-- запрос ниже полностью идентичен верхнему, но с более лаконичным синтаксисом
+
+SELECT *,
+	   SUM(amount) OVER (PARTITION BY staff_id ROWS 1 PRECEDING) AS avg_amount
+FROM payment p;
+
+------------------------------------
+
+-- Помимо ROWS есть режим RANGE. С помощью него можно задавать рамки исходя из значений данных
+
+SELECT *,
+	   -- такой запрос выведет среднюю сумму за последние 3 дня до текущего
+	   AVG(amount) OVER (ORDER BY payment_date RANGE '3 day' PRECEDING) AS avg_amount -- ORDER BY (допустим только с 1 столбцом) c RANGE обязателен!
+FROM payment p;
+
+------------------------------------
+
+SELECT *,
+	   -- запрос выведет сумму всех значений amount, где значение customer_id в диапазоне (тек.-1 <= тек. >= тек.+1)
+	   SUM(amount) OVER (ORDER BY customer_id RANGE BETWEEN 1 PRECEDING AND 1 FOLLOWING)
+FROM payment p
+WHERE amount = 0.99;
+
+------------------------------------
+
+SELECT *,
+	   -- Такой запрос выведет сумму всех значений накопительным итогом начиная с конца с постепенным уменьшением
+	   SUM(amount) OVER (ORDER BY payment_id ROWS BETWEEN CURRENT ROW AND UNBOUNDED FOLLOWING) -- здесь UNBOUNDED берёт все строки до текущего от начала окна
+FROM payment p
+
+/****************************************************************************************/
+
+-- РАБОТА РАМОК ПО УМОЛЧАНИЮ
+
+SELECT *,
+	   -- такая запись окна равна SUM(amount) OVER (ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING)
+	   SUM(amount) OVER () 
+FROM payment p;
+
+SELECT *,
+	   -- такая запись окна равна SUM(amount) OVER (ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)
+	   SUM(amount) OVER (ORDER BY payment_id) 
+FROM payment p;
+
+/****************************************************************************************/
