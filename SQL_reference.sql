@@ -789,3 +789,59 @@ SELECT *,
 FROM payment p;
 
 /****************************************************************************************/
+
+-- ДОПОЛНИТЕЛЬНЫЕ ОКОКННЫЕ ФУНКЦИИ. LAST_VALUE(), FIRST_VALUE(), NTH_VALUE(), EXCLUDE()
+
+SELECT *,
+	   -- выведет первое значение amount исходной таблицы из каждого окна по customer_id
+	   FIRST_VALUE(amount) OVER (PARTITION BY customer_id)
+FROM payment p;
+
+---------------------------------------
+
+SELECT *,
+	   /* выведет самое маленькое значение amount из каждого окна по customer_id
+	    * из-за использования ORDER BY рамки по умолчанию стали равны промежутку: 
+	    * от всех предыдущих значений до текущего (CURRENT ROW). Поэтому рамки вручную надо расширить */
+	   LAST_VALUE(amount) OVER (PARTITION BY customer_id ORDER BY amount DESC ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING)
+FROM payment p;
+
+---------------------------------------
+
+SELECT *,
+	   -- NTH_VALUE в данном случае позволяет 2 по величине число (от большего к меньшему). Рамки тоже расширяем вручную 
+	   NTH_VALUE(amount, 2) OVER (PARTITION BY customer_id ORDER BY amount DESC ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING)
+FROM payment p;
+
+---------------------------------------
+
+SELECT *,
+	   -- EXCLUDE CURRENT ROW исключит текущие записи в каждой рамке
+	   SUM(amount) OVER (ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING EXCLUDE CURRENT ROW) -- EXCLUDE только после рамки можно писать
+FROM payment p;
+
+---------------------------------------
+
+SELECT *,
+	   -- EXCLUDE GROUP исключит текущую запись и все, что одинаковые с ней (по customer_id) в каждой рамке
+	   SUM(amount) OVER (ORDER BY customer_id ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW EXCLUDE GROUP)
+FROM payment p;
+
+---------------------------------------
+
+SELECT *,
+	   /* EXCLUDE GROUP исключит текущую запись и все что одинаковые с ней по customer_id в каждой рамке.
+	    * В данном случае сумма посчитается накопительным итогом и в каждой рамке customer_id текущей строчки
+	    * не будет попадать в расчёт */
+	   SUM(amount) OVER (ORDER BY customer_id ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW EXCLUDE GROUP)
+FROM payment p;
+
+---------------------------------------
+
+SELECT *,
+	   /* EXCLUDE TIES исключит все записи группы по customer_id, кроме самой текущей записи группы.
+	    * все остальные группы до текущей записи будут в итоговой сумме */
+	   SUM(amount) OVER (ORDER BY customer_id ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW EXCLUDE TIES)
+FROM payment p;
+
+---------------------------------------
