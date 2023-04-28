@@ -845,3 +845,8 @@ SELECT *,
 FROM payment p;
 
 ---------------------------------------
+
+SELECT *,
+	   -- EXCLUDE NO OTHERS не исключит никакие записи из всех рамок. Это значение по умолчанию!
+	   SUM(amount) OVER (ORDER BY customer_id ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW EXCLUDE NO OTHERS)
+FROM payment p;
