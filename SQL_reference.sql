@@ -1,4 +1,3 @@
-
 -- Пример однострочного комментария
 /* Пример
    многострочного
@@ -6,66 +5,18 @@
 
 /****************************************************************************************/
 
--- СОЗДАТЬ БАЗУ ДАННЫХ
-
-CREATE DATABASE usersdb; -- стандартные настройки
-
--- СОЗДАТЬ ТАБЛИЦЫ
-
-CREATE TABLE movie (
-	film_id serial4 PRIMARY KEY, -- первичный ключ, тип числового автозаполнения
-	title varchar(255), -- символьная строка с максимальной длиной в 255 символов
-	description text, -- символьная строка произвольной длины
-	release_year smallint, -- двухбайтное целое число
-	language_id smallint,
-	rental_duration smallint,
-	rental_rate numeric(4, 2),  --- вещественное число от -999,99 до 999,99
-	length smallint,
-	replacement_cost numeric(5, 2),
-	rating character varying(50), -- тоже самое, что varchar(50)
-	last_update timestamp NOT NULL DEFAULT now(), -- дата и время, не возможен NULL, по умолчанию дата создания записи
-	special_features text[], -- скобки означают массив в каждой записи
-	fulltext tsvector -- текстовый формат оптимизированный для поиска
-);
-
--- со связями
-
-CREATE TABLE film_category (
-	film_id serial4 PRIMARY KEY,
-	category_id integer, -- четырёхбайтное целове число
-	last_update timestamp NOT NULL DEFAULT now(),
-	FOREIGN KEY (category_id) REFERENCES category(category_id) ON DELETE SET NULL, -- при удалении объекта на который ссылаемся, проставить NULL
-	FOREIGN KEY (film_id) REFERENCES movie (film_id) ON DELETE CASCADE -- при удалении объекта на который ссылаемся, удалить и этот объект
-);
-
--- как загрузить данные из .csv
-
-COPY film_category -- в какую таблицу
-FROM 'D:\BASE_DATA\film_category.csv' -- из какого файла 
-DELIMITER '	' -- какой используется разделитель
-csv -- какой формат
-header; -- есть ли заголовок
-
-/****************************************************************************************/
-
-/* Команда для бэкапа базы из дампа: psql -f D:\mushrooms.sql -h localhost -p 5432 -U postgres -d mushrooms
-   Выполняем из директории с исполняемым файлом psql (C:\Program Files\PostgreSQL\15\bin)
-   'mushrooms' - это название созданной пустой базы для бэкапа */
-
-/****************************************************************************************/
-
 -- ПРОСТЫЕ ЗАПРОСЫ К БАЗАМ ДАННЫМ
 
 SELECT name AS "Наименование", -- Переименовываем столбец "на лету" (обязательно ДВОЙНЫЕ КАВЫЧКИ)
 	   last_update
-FROM category -- из таблицы category
-LIMIT 2; -- первые 2 строчки
+FROM category
+LIMIT 2 OFFSET 0;
 
 ---------------------------------------
 
 SELECT *  -- выгрузить все столбцы
 FROM film
-LIMIT 3 OFFSET 7; -- OFFSET игнорирует первые 7 строк и переходит к 8-й
+LIMIT 3 OFFSET 7;
 
 ---------------------------------------
 
@@ -80,13 +31,13 @@ LIMIT 6;
 
 SELECT *
 FROM film
-WHERE replacement_cost >= 29.99; -- больше или равно 29,99
+WHERE replacement_cost >= 29.99;
 
 ---------
 
 SELECT *
 FROM country
-WHERE country = 'Brazil'; -- равно работает со строками тоже
+WHERE country = 'Brazil';
 
 ---------
 
@@ -101,14 +52,22 @@ WHERE country <> 'Brazil'; -- "!=" тоже подходит
 SELECT *
 FROM country
 WHERE country <> 'Brazil'
-  AND country != 'Afghanistan'; -- когда AND оба условия должны быть верны 
+  AND country != 'Afghanistan';
  
 ---------
  
 SELECT *
 FROM country
-WHERE NOT country <> 'Brazil' -- NOT меняет TRUE на FALSE, и наоборот
-   OR NOT country != 'Afghanistan'; -- когда OR одно из условий должно быть TRUE для записи, чтобы попасть в итог
+WHERE NOT country <> 'Brazil'
+   OR NOT country != 'Afghanistan';
+
+---------
+  
+SELECT *
+FROM payment
+WHERE customer_id = 341
+   OR customer_id = 342
+LIMIT 10;
 
 ---------------------------------------
 
@@ -149,7 +108,7 @@ SELECT actor_id,
 	   first_name,
 	   last_name
 FROM actor
-WHERE actor_id BETWEEN 10 AND 20; -- ищем значения между 10 включительно и 20 включительно
+WHERE actor_id BETWEEN 10 AND 20; -- ищем значения между 10 и 20 включительно
 
 ---------------------------------------
 
@@ -343,7 +302,7 @@ LIMIT 10; -- лимит устанавливается самым последн
 
 SELECT rating, AVG(rental_rate) "Средняя ставка аренды" -- Псевдоним (или алиас) можно указать без AS, просто через пробел (фишка Postgre)
 FROM film
-GROUP BY rating -- в Postgre при группировке можно обращаться к столбцам из SELECT по порядковому номеру
+GROUP BY 1 -- в Postgre при группировке можно обращаться к столбцам из SELECT по порядковому номеру
 HAVING AVG(rental_rate) > 3 -- псевдоним "Средняя ставка аренды" появиться позже, поэтому дублируем агрегатную функцию
 ORDER BY "Средняя ставка аренды" DESC;
 
@@ -434,14 +393,16 @@ LIMIT 10;
 
 SELECT first_name, last_name
 FROM staff
-UNION SELECT first_name, last_name -- в итоговой таблице никакие данные не добавяться, т.к.  UNION не допускает дубликатов
+UNION SELECT first_name, last_name
+	  -- в итоговой таблице никакие данные не добавяться, т.к.  UNION не допускает дубликатов
 	  FROM staff;
 	 
 ----------------
 
 SELECT first_name, last_name
 FROM staff
-UNION ALL SELECT first_name, last_name -- а здесь данные будут задублированы, т.к. оператор UNION ALL допускает это
+UNION ALL SELECT first_name, last_name
+	  -- а здесь данные будут задублированы, т.к. оператор UNION ALL допускает это
 	  FROM staff;
 
 /****************************************************************************************/
@@ -525,21 +486,26 @@ FROM one LEFT JOIN two ON one.film_id = two.film_id;
 
 /****************************************************************************************/
 
--- ОКОННЫЕ ФУНКЦИИ (позволяют добавлять агрегированные данные без группировки записей)
+/* ОКОННЫЕ ФУНКЦИИ (позволяют добавлять агрегированные данные без группировки записей
+ * исходной таблицы в результирующую) */
 
 SELECT f.film_id,
 	   f.title,
 	   f.length,
 	   f.rating,
-	   AVG(length) OVER (PARTITION BY f.rating) AS avg_length -- не лету вычислили среднюю длину фильма в зависимости от категории без группировки записей
-FROM public.film f; -- в данном случае обратились к конкретной схеме (public) и таблице film. В предыдущих запросах public используется по умолчанию
+	   AVG(length) OVER (PARTITION BY f.rating) AS avg_length
+	   -- не лету вычислили среднюю длину фильма в зависимости от категории без группировки записей
+FROM public.film f;
+/* в данном случае обратились к конкретной схеме (public) и таблице film.
+ * В предыдущих запросах public используется по умолчанию */
 
 ---------------------
 
 SELECT f.title,
 	   f.length,
 	   f.rating,
-	   SUM(length) OVER () AS avg_length -- такой запрос применит агрегирующую функцию ко всем записям без разбивки по категориям
+	   SUM(length) OVER () AS avg_length
+	   -- такой запрос применит агрегирующую функцию ко всем записям без разбивки по категориям
 FROM public.film f;
 
 ---------------------
@@ -548,28 +514,32 @@ SELECT f.title,
 	   f.length,
 	   f.rating,
 	   f.rental_rate,
-	   SUM(length) OVER (PARTITION BY f.rating, rental_rate) AS avg_length -- аналогично GROUP BY можно группировать данные сразу по нескольким столбцам
+	   SUM(length) OVER (PARTITION BY f.rating, rental_rate) AS avg_length
+	   -- аналогично GROUP BY можно группировать данные сразу по нескольким столбцам
 FROM public.film f;
 
 ---------------------
 
 SELECT f.title,
 	   f.rating,
-	   ROW_NUMBER() OVER (PARTITION BY f.rating) -- ROW_NUMBER последовательно нумерует строки в каждом окне независимо
+	   ROW_NUMBER() OVER (PARTITION BY f.rating)
+	   -- ROW_NUMBER последовательно нумерует строки в каждом окне независимо
 FROM public.film f;
 
 ---------------------
 
 SELECT f.title,
 	   f.rating,
-	   ROW_NUMBER() OVER (ORDER BY film_id ASC) -- такой запрос проранжирует все записи по film_id - от меньшего к большему
+	   ROW_NUMBER() OVER (ORDER BY film_id ASC)
+	   -- такой запрос проранжирует все записи по film_id - от меньшего к большему
 FROM public.film f;
 
 ---------------------
 
 WITH film_rn AS -- для визуального удобства используем временную таблицу
 	(SELECT f.title,
-	   		ROW_NUMBER() OVER (ORDER BY rating, film_id) AS rn -- можно сортировать по нескольким столбцам (в данном случае raiting самый приоритетный)
+	   		ROW_NUMBER() OVER (ORDER BY rating, film_id) AS rn
+			-- можно сортировать по нескольким столбцам (в данном случае raiting самый приоритетный)
 	 FROM public.film f)
 
 SELECT *
@@ -582,7 +552,8 @@ SELECT *,
 	   RANK() OVER (ORDER BY "length") -- RANK пронумерует одинаковую длину фильма одним номером
 FROM film;
 
--- ВАЖНЫЙ МОМЕНТ: RANK для каждого следующего ранга номер вычисляется не от предыдущего номера ранга а по номеру записи в таблице
+/* ВАЖНЫЙ МОМЕНТ: RANK для каждого следующего ранга номер вычисляется не от предыдущего
+ * номера ранга а по номеру записи в таблице */
 
 ---------------------
 
@@ -594,7 +565,8 @@ FROM film;
 
 SELECT f.title,
 	   f.rating,
-	   NTILE(5) OVER (ORDER BY film_id ASC) -- NTILE делит все записи на максимально равные части по кол-ву и ранжирует их
+	   NTILE(5) OVER (ORDER BY film_id ASC)
+	   -- NTILE делит все записи на максимально равные части по кол-ву и ранжирует их
 FROM public.film f
 LIMIT 201; -- оконная функция проранжирует все данные до срабатывания ограничения LIMIT
 
@@ -606,7 +578,8 @@ WITH film_rn AS
 	(SELECT f.title,
 			f.rating,
 			f.length,
-	   		ROW_NUMBER() OVER (PARTITION BY f.rating ORDER BY f.length DESC) AS rn -- порядок написания имеет значения
+	   		ROW_NUMBER() OVER (PARTITION BY f.rating ORDER BY f.length DESC) AS rn
+			-- порядок написания имеет значения
 	 FROM public.film f)
 
 SELECT *
@@ -616,7 +589,8 @@ WHERE film_rn.rn = 1; -- получим самый длинный фильм в 
 ---------------------
 
 SELECT *,
-	   NTILE(3) OVER (PARTITION BY f.rating ORDER BY film_id) -- здесь сначала резделим на рейтинги, далее ранжирование NTILE и наконец сортировка по id
+	   NTILE(3) OVER (PARTITION BY f.rating ORDER BY film_id)
+	   -- здесь сначала резделим на рейтинги, далее ранжирование NTILE и наконец сортировка по id
 FROM public.film f;
 
 ---------------------
@@ -651,7 +625,8 @@ SELECT film_id,
 	   rating,
 	   "length",
 	   row_n,
-	   AVG("length") OVER (PARTITION BY rating ORDER BY film_id) AS length_cum -- остальные агрег. функции тоже работают кумулятивно
+	   -- остальные агрегатные функции тоже работают кумулятивно
+	   AVG("length") OVER (PARTITION BY rating ORDER BY film_id) AS length_cum
 	   /* такой запрос отобразит среднее значение накопительным итогом в разрезе каждой группы отдельно
 	    * и отобразит при этом не одинаковую цифру, а разные в каждой записе, т.к. ORDER BY уже по уникальным film_id */
 FROM film_rn
@@ -670,8 +645,10 @@ SELECT p.customer_id,
 	   c.full_name,
 	   p.payment_id,
 	   p.payment_date::date AS "Дата оплаты",
-	   LEAD(p.payment_date::date, 1, '2000-01-01') OVER (PARTITION BY p.customer_id) AS "След. дата оплаты", -- в качестве значения по умолчанию - дата
-	   LAG(p.payment_date::date, 2, NULL) OVER (PARTITION BY p.customer_id ORDER BY payment_id) AS "Пред. дата оплаты" -- смещение на 2 строки
+	   LEAD(p.payment_date::date, 1, '2000-01-01') OVER (PARTITION BY p.customer_id) AS "След. дата оплаты",
+	   -- в качестве значения по умолчанию - дата
+	   LAG(p.payment_date::date, 2, NULL) OVER (PARTITION BY p.customer_id ORDER BY payment_id) AS "Пред. дата оплаты"
+	   -- смещение на 2 строки
 	   -- ORDER BY определяет сортировку по полю относительно которого будем смотреть данные по функции
 FROM (SELECT customer_id,
 			 CONCAT(first_name, ' ', last_name) AS full_name
@@ -694,7 +671,7 @@ FROM (SELECT customer_id,
 	  FROM customer) AS c
 JOIN payment AS p ON c.customer_id = p.customer_id;
 
-----------------------
+-----------------------
 
 -- определение оконной функции после OVER можно вынести отдельно с помощью WINDOW
 
@@ -718,7 +695,7 @@ ORDER BY "length"; -- -- WINDOW записывается до ORDER BY
 
 /****************************************************************************************/
 
--- РАМКИ В ОКОННЫХ ФУНКЦИЯХ. ДОПОЛНИТЕЛЬНЫЕ ФУНКЦИИ
+-- РАМКИ В ОКОННЫХ ФУНКЦИЯХ
 
 /* Рамки позволяют указать записи, которые попадут в рамку, — до и после текущей.
  * Конструкция с ROWS (RANGE) выглядит так: ROWS BETWEEN <начало рамки> AND <конец рамки>
@@ -726,13 +703,15 @@ ORDER BY "length"; -- -- WINDOW записывается до ORDER BY
  * Конец рамки задают выражением N FOLLOWING, где N — это количество записей после текущей. */
 
 SELECT *,
-	   AVG(amount) OVER (ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING) AS avg_amount -- порядок операторов важен внутри OVER
+	   AVG(amount) OVER (ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING) AS avg_amount
+	   -- порядок операторов важен внутри OVER
 FROM payment p;
 
 ------------------------------------
 
 SELECT *,
-	   AVG(amount) OVER (ROWS BETWEEN CURRENT ROW AND 2 FOLLOWING) AS avg_amount -- CURRENT_ROW значит рамка начинается с текущей строчки
+	   AVG(amount) OVER (ROWS BETWEEN CURRENT ROW AND 2 FOLLOWING) AS avg_amount
+	   -- CURRENT_ROW значит рамка начинается с текущей строчки
 FROM payment p;
 
 ------------------------------------
@@ -803,21 +782,28 @@ SELECT *,
 	   /* выведет самое маленькое значение amount из каждого окна по customer_id
 	    * из-за использования ORDER BY рамки по умолчанию стали равны промежутку: 
 	    * от всех предыдущих значений до текущего (CURRENT ROW). Поэтому рамки вручную надо расширить */
-	   LAST_VALUE(amount) OVER (PARTITION BY customer_id ORDER BY amount DESC ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING)
+	   LAST_VALUE(amount) OVER (
+							PARTITION BY customer_id ORDER BY amount DESC
+							ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
+						)
 FROM payment p;
 
 ---------------------------------------
 
 SELECT *,
 	   -- NTH_VALUE в данном случае позволяет 2 по величине число (от большего к меньшему). Рамки тоже расширяем вручную 
-	   NTH_VALUE(amount, 2) OVER (PARTITION BY customer_id ORDER BY amount DESC ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING)
+	   NTH_VALUE(amount, 2) OVER (
+								PARTITION BY customer_id ORDER BY amount DESC
+								ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
+							)
 FROM payment p;
 
 ---------------------------------------
 
 SELECT *,
 	   -- EXCLUDE CURRENT ROW исключит текущие записи в каждой рамке
-	   SUM(amount) OVER (ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING EXCLUDE CURRENT ROW) -- EXCLUDE только после рамки можно писать
+	   SUM(amount) OVER (ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING EXCLUDE CURRENT ROW)
+	   -- EXCLUDE только после рамки можно писать
 FROM payment p;
 
 ---------------------------------------
@@ -850,3 +836,102 @@ SELECT *,
 	   -- EXCLUDE NO OTHERS не исключит никакие записи из всех рамок. Это значение по умолчанию!
 	   SUM(amount) OVER (ORDER BY customer_id ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW EXCLUDE NO OTHERS)
 FROM payment p;
+
+
+/****************************************************************************************************************/
+
+
+-- СОЗДАТЬ БАЗУ ДАННЫХ
+
+CREATE DATABASE usersdb; -- стандартные настройки
+
+-- СОЗДАТЬ ТАБЛИЦЫ
+
+CREATE TABLE movie (
+	film_id serial4 PRIMARY KEY, -- первичный ключ, тип числового автозаполнения
+	title varchar(255), -- символьная строка с максимальной длиной в 255 символов
+	description text, -- символьная строка произвольной длины
+	release_year smallint, -- двухбайтное целое число
+	language_id smallint,
+	rental_duration smallint,
+	rental_rate numeric(4, 2),  --- вещественное число от -999,99 до 999,99
+	length smallint,
+	replacement_cost numeric(5, 2),
+	rating character varying(50), -- тоже самое, что varchar(50)
+	last_update timestamp NOT NULL DEFAULT now(), -- дата и время, не возможен ноль, по умолчанию дата создания записи
+	special_features text[], -- скобки означают массив в каждой записи
+	fulltext tsvector -- текстовый формат оптимизированный для поиска
+);
+
+-- со связями
+
+CREATE TABLE film_category (
+	film_id serial4 PRIMARY KEY,
+	category_id integer, -- четырёхбайтовое целове число
+	last_update timestamp NOT NULL DEFAULT now(),
+	FOREIGN KEY (category_id) REFERENCES category(category_id) ON DELETE SET NULL,
+	-- при удалении объекта на который ссылаемся, проставить NULL
+	FOREIGN KEY (film_id) REFERENCES movie (film_id) ON DELETE CASCADE
+	-- при удалении объекта на который ссылаемся, удалить и этот объект
+);
+
+-- создание таблицы из другой таблицы
+
+CREATE TABLE actor_two AS
+SELECT actor_id, first_name
+FROM actor;
+
+-- УДАЛИТЬ ТАБЛИЦУ
+
+DROP TABLE actor_two;
+
+-- ДОБАВЛЕНИЕ ЗАПИСЕЙ В ТАБЛИЦУ
+
+INSERT INTO actor (first_name, last_name) -- таблица (столбцы)
+VALUES
+	('Ivan', 'Ivanov'), -- кортеж новый значений
+	('Petr', 'Petrov'); -- кортеж новый значений
+
+-- можно добавить значение из другой таблицы
+
+INSERT INTO actor (first_name, last_name)
+SELECT first_name, last_name
+FROM customer
+LIMIT 2;
+
+-- ОБНОВЛЕНИЕ ТАБЛИЦЫ
+
+UPDATE actor -- какую таблицу
+SET last_update = NOW(), -- что и как обновляем
+	last_name = 'Updatov'
+WHERE actor_id IN (SELECT actor_id -- какие строки
+				   FROM actor
+				   ORDER BY actor_id DESC
+				   LIMIT 4);
+				  
+-- УДАЛЕНИЕ СТРОК ИЗ ТАБЛИЦЫ
+				  
+				  
+DELETE FROM actor -- откуда удаляем
+WHERE actor_id IN (SELECT actor_id -- какие строки
+				   FROM actor
+				   ORDER BY actor_id DESC
+				   LIMIT 4);
+
+
+-- загрузить данные из .csv
+
+COPY film_category -- в какую таблицу
+FROM 'D:\BASE_DATA\film_category.csv' -- из какого файла 
+DELIMITER '	' -- какой используется разделитель
+csv -- какой формат
+header; -- есть ли заголовок
+
+/****************************************************************************************/
+
+/* Команда для бэкапа базы из дампа: psql -f D:\mushrooms.sql -h localhost -p 5432 -U postgres -d mushrooms
+   Выполняем из директории с исполняемым файлом psql (C:\Program Files\PostgreSQL\15\bin)
+   'mushrooms' - это название созданной пустой базы для бэкапа
+*/
+
+/****************************************************************************************/
